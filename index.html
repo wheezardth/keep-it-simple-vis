@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KEEP IT SIMPLE — ID2 Alumni Atlas</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.js"></script>
+<script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
+
+<style>
+  :root{
+    --bg: #0b0f19;
+    --bg-deep: #070a11;
+    --panel: rgba(255,255,255,0.045);
+    --panel-border: rgba(255,255,255,0.09);
+    --panel-border-hover: rgba(255,255,255,0.16);
+    --text-1: #e9ecf5;
+    --text-2: #9aa2b8;
+    --text-3: #616a80;
+
+    --c-all: #00f2fe;
+    --c-all-soft: rgba(0,242,254,0.16);
+    --c-early: #7000ff;
+    --c-early-soft: rgba(112,0,255,0.18);
+    --c-late: #00f5a0;
+    --c-late-soft: rgba(0,245,160,0.16);
+
+    --radius-lg: 20px;
+    --radius-md: 14px;
+    --radius-sm: 9px;
+
+    --accent: var(--c-all);
+    --accent-soft: var(--c-all-soft);
+    --ease: cubic-bezier(.22,.9,.28,1);
+  }
+
+  *{ box-sizing: border-box; }
+  html, body{ margin:0; padding:0; }
+
+  body{
+    background: radial-gradient(ellipse 1200px 800px at 20% -10%, rgba(112,0,255,0.10), transparent 60%),
+                radial-gradient(ellipse 1000px 700px at 100% 0%, rgba(0,242,254,0.08), transparent 55%),
+                var(--bg);
+    color: var(--text-1);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  ::selection{ background: var(--accent-soft); }
+  ::-webkit-scrollbar{ width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track{ background: transparent; }
+  ::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.12); border-radius: 8px; }
+
+  .glass{
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 10px 40px -12px rgba(0,0,0,0.55);
+  }
+
+  header{
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 20px; padding: 16px 26px; z-index: 40; flex-shrink: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .brand{ display: flex; align-items: center; gap: 12px; }
+  .brand-mark{
+    width: 34px; height: 34px; border-radius: 10px;
+    background: conic-gradient(from 180deg, var(--c-all), var(--c-early), var(--c-late), var(--c-all));
+    display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .brand-mark::after{ content:""; position:absolute; inset: 3px; border-radius: 8px; background: var(--bg-deep); }
+  .brand-mark svg{ position: relative; z-index: 2; width: 16px; height: 16px; color: var(--text-1); }
+
+  .brand-text{ display: flex; flex-direction: column; line-height: 1.15; }
+  .brand-text .name{ font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 17px; letter-spacing: 0.4px; }
+  .brand-text .sub{ font-size: 11.5px; color: var(--text-3); }
+
+  .region-tabs{ display: flex; gap: 4px; background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: 999px; padding: 4px; }
+  .region-tab{ appearance: none; border: none; background: transparent; color: var(--text-2); font-family: inherit; font-size: 13px; font-weight: 500; padding: 7px 15px; border-radius: 999px; cursor: pointer; transition: color .25s var(--ease); position: relative; white-space: nowrap; }
+  .region-tab.active{ color: var(--bg-deep); }
+ .region-tab-bg{ position: absolute; top: 4px; bottom: 4px; border-radius: 999px; height: 70px; background: var(--text-1); transition: left .35s var(--ease), width .35s var(--ease); z-index: 0; }
+  .region-tab span{ position: relative; z-index: 1; }
+
+  .header-right{ display:flex; align-items:center; gap: 12px; }
+
+  .search-wrap{ position: relative; }
+  .search-box{ display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--panel-border); border-radius: 11px; padding: 8px 12px; width: 230px; transition: border-color .2s var(--ease), width .3s var(--ease); }
+  .search-box:focus-within{ border-color: var(--panel-border-hover); width: 260px; }
+  .search-box svg{ width: 15px; height: 15px; color: var(--text-3); flex-shrink: 0; }
+  .search-box input{ background: transparent; border: none; outline: none; color: var(--text-1); font-family: inherit; font-size: 13px; width: 100%; }
+  .search-box input::placeholder{ color: var(--text-3); }
+
+  .autocomplete{ position: absolute; top: calc(100% + 8px); left: 0; right: 0; background: rgba(15,19,30,0.97); border: 1px solid var(--panel-border-hover); border-radius: 12px; overflow: hidden; display: none; box-shadow: 0 20px 50px -10px rgba(0,0,0,0.6); z-index: 100; max-height: 280px; overflow-y: auto; }
+  .autocomplete.open{ display: block; }
+  .autocomplete-item{ padding: 9px 13px; font-size: 12.5px; color: var(--text-2); cursor: pointer; display:flex; justify-content: space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .autocomplete-item:last-child{ border-bottom: none; }
+  .autocomplete-item:hover, .autocomplete-item.hi{ background: rgba(255,255,255,0.06); color: var(--text-1); }
+  .autocomplete-item small{ color: var(--text-3); font-size: 11px; }
+
+  .icon-btn{ width: 34px; height: 34px; display: flex; align-items:center; justify-content:center; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid var(--panel-border); color: var(--text-2); cursor: pointer; transition: all .2s var(--ease); }
+  .icon-btn:hover{ color: var(--text-1); border-color: var(--panel-border-hover); }
+  .icon-btn svg{ width: 16px; height: 16px; }
+
+  .app{ flex: 1; display: flex; flex-direction: column; padding: 18px 26px 22px; gap: 16px; min-height: 0; }
+
+  .map-zone{ position: relative; flex: 1.35; min-height: 0; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--panel-border); }
+  #map{ width: 100%; height: 100%; background: var(--bg-deep); }
+  .leaflet-tile-pane{ filter: saturate(1.05) brightness(0.92); }
+
+  .kpi-overlay{ position: absolute; top: 18px; left: 18px; display: grid; grid-template-columns: repeat(4, minmax(122px,1fr)); gap: 10px; z-index: 30; pointer-events: none; }
+  .kpi-card{ pointer-events: auto; padding: 13px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 122px; }
+  .kpi-label{ font-size: 10.5px; color: var(--text-3); letter-spacing: 0.2px; }
+  .kpi-value{ font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 600; color: var(--text-1); letter-spacing: 0.2px; }
+  .kpi-delta{ font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 3px; color: var(--text-2); }
+
+  .metric-overlay{ position: absolute; top: 18px; right: 18px; z-index: 30; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .metric-overlay .metric-title{ font-size: 10.5px; color: var(--text-3); padding: 4px 8px 2px; }
+  .metric-btn{ display: flex; align-items: center; gap: 9px; background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; cursor: pointer; font-family: inherit; color: var(--text-2); font-size: 12.5px; font-weight: 500; transition: all .2s var(--ease); text-align: left; width: 178px; }
+  .metric-dot{ width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 0 transparent; transition: box-shadow .25s var(--ease); }
+  .metric-btn[data-cohort="all"] .metric-dot{ background: var(--c-all); }
+  .metric-btn[data-cohort="early"] .metric-dot{ background: var(--c-early); }
+  .metric-btn[data-cohort="late"] .metric-dot{ background: var(--c-late); }
+  .metric-btn:hover{ background: rgba(255,255,255,0.05); color: var(--text-1); }
+  .metric-btn.active{ background: rgba(255,255,255,0.07); color: var(--text-1); border-color: var(--panel-border-hover); }
+  .metric-btn.active[data-cohort="all"] .metric-dot{ box-shadow: 0 0 10px 2px var(--c-all); }
+  .metric-btn.active[data-cohort="early"] .metric-dot{ box-shadow: 0 0 10px 2px var(--c-early); }
+  .metric-btn.active[data-cohort="late"] .metric-dot{ box-shadow: 0 0 10px 2px var(--c-late); }
+
+  .map-footnote{ position: absolute; bottom: 16px; left: 18px; z-index: 30; padding: 9px 14px; font-size: 11.5px; color: var(--text-2); display: flex; align-items: center; gap: 8px; }
+  .map-footnote strong{ color: var(--text-1); font-weight: 600; }
+  .map-footnote .clear-btn{ color: var(--text-3); cursor: pointer; text-decoration: underline; text-decoration-color: rgba(255,255,255,0.2); margin-left: 4px; }
+  .map-footnote .clear-btn:hover{ color: var(--text-1); }
+
+  .node-marker{ border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .node-marker .core{ width: 100%; height: 100%; border-radius: 50%; position: relative; }
+  .node-marker .pulse{ position: absolute; inset: 0; border-radius: 50%; animation: pulse-ring 2.6s var(--ease) infinite; }
+  @keyframes pulse-ring{ 0%{ transform: scale(0.7); opacity: .55; } 100%{ transform: scale(2.6); opacity: 0; } }
+  .node-marker.dim .core, .node-marker.dim .pulse{ opacity: 0.12; }
+  .node-marker.selected .core{ box-shadow: 0 0 0 3px rgba(255,255,255,0.6), 0 0 22px 6px currentColor; }
+
+  .leaflet-tooltip-glass{ background: rgba(13,17,27,0.92) !important; border: 1px solid var(--panel-border-hover) !important; border-radius: 12px !important; color: var(--text-1) !important; font-family: 'Inter', sans-serif !important; padding: 10px 13px !important; box-shadow: 0 0 0 1px rgba(255,255,255,0.03), 0 18px 40px -8px rgba(0,0,0,0.6), 0 0 24px -4px var(--tooltip-glow, rgba(0,242,254,0.35)) !important; }
+  .leaflet-tooltip-glass::before{ display: none !important; }
+  .tt-city{ font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+  .tt-region{ font-size: 10.5px; color: var(--text-3); margin-bottom: 7px; }
+  .tt-row{ display:flex; justify-content: space-between; gap: 14px; font-size: 11.5px; color: var(--text-2); padding: 1px 0;}
+  .tt-row b{ color: var(--text-1); font-weight: 600; }
+
+  .leaflet-control-zoom{ display: none; }
+  .leaflet-control-attribution{ background: rgba(0,0,0,0.35) !important; color: var(--text-3) !important; font-size: 9.5px !important; backdrop-filter: blur(6px); }
+  .leaflet-control-attribution a{ color: var(--text-2) !important; }
+
+  .chart-zone{ display: grid; grid-template-columns: 1.55fr 1fr; gap: 16px; flex: 1; min-height: 0; }
+  .chart-panel{ padding: 18px 20px 14px; display: flex; flex-direction: column; min-height: 0; }
+  .chart-head{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .chart-head h3{ font-family: 'Space Grotesk', sans-serif; font-size: 14.5px; font-weight: 600; margin: 0 0 3px; color: var(--text-1); }
+  .chart-head p{ margin: 0; font-size: 11.5px; color: var(--text-3); }
+  .chart-badge{ font-size: 10.5px; padding: 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; white-space: nowrap; }
+  .chart-canvas-wrap{ flex: 1; position: relative; min-height: 0; }
+
+  .bar-list{ flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; margin-top: 6px; }
+  .bar-row{ display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .bar-row .rank{ font-size: 10.5px; color: var(--text-3); width: 14px; flex-shrink: 0; font-family: 'Space Grotesk', sans-serif;}
+  .bar-row .meta{ width: 100px; flex-shrink: 0; }
+  .bar-row .meta .city{ font-size: 12px; font-weight: 600; color: var(--text-1); white-space: nowrap; overflow:hidden; text-overflow: ellipsis; }
+  .bar-row .meta .region{ font-size: 10px; color: var(--text-3); white-space: nowrap; overflow:hidden; text-overflow: ellipsis; }
+  .bar-track{ flex: 1; height: 7px; border-radius: 6px; background: rgba(255,255,255,0.06); overflow: hidden; }
+  .bar-fill{ height: 100%; border-radius: 6px; width: 0%; transition: width .7s var(--ease), background .3s var(--ease); }
+  .bar-row .val{ width: 44px; text-align: right; font-size: 11.5px; font-weight: 600; color: var(--text-2); flex-shrink: 0; }
+
+  @media (max-width: 980px){
+    .region-tabs{ display: none; }
+    .kpi-overlay{ grid-template-columns: repeat(2, minmax(100px,1fr)); }
+    .chart-zone{ grid-template-columns: 1fr; }
+  }
+  //@media (prefers-reduced-motion: reduce){ *{ animation-duration: 1226ms !important; transition-duration: 1226ms !important; } }
+  button:focus-visible, input:focus-visible, [tabindex]:focus-visible{ outline: 2px solid var(--text-1); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2c2.5 2.7 4 6.2 4 10s-1.5 7.3-4 10c-2.5-2.7-4-6.2-4-10s1.5-7.3 4-10z"/></svg>
+    </div>
+    <div class="brand-text">
+      <span class="name">KEEP IT SIMPLE</span>
+      <span class="sub">ID2 Alumni Atlas · University of Applied Arts Vienna, Prof. Hartmut Esslinger, 2006–2011</span>
+    </div>
+  </div>
+
+  <nav class="region-tabs" id="regionTabs">
+    <div class="region-tab-bg" id="tabBg"></div>
+    <button class="region-tab active" data-region="global"><span>Global</span></button>
+    <button class="region-tab" data-region="na"><span>North America</span></button>
+    <button class="region-tab" data-region="eu"><span>Europe</span></button>
+    <button class="region-tab" data-region="apac"><span>Asia-Pacific</span></button>
+  </nav>
+
+  <div class="header-right">
+    <div class="search-wrap">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="searchInput" placeholder="Search a city…" autocomplete="off">
+      </div>
+      <div class="autocomplete" id="autocomplete"></div>
+    </div>
+    <div class="icon-btn" id="refreshBtn" title="Reset view"><i data-lucide="refresh-cw"></i></div>
+    <div class="icon-btn" id="expandBtn" title="Toggle panels"><i data-lucide="layout-panel-top"></i></div>
+  </div>
+</header>
+
+<div class="app">
+
+  <div class="map-zone glass">
+    <div id="map"></div>
+
+    <div class="kpi-overlay">
+      <div class="kpi-card glass">
+        <span class="kpi-label" id="kpiLabel1">Active cities</span>
+        <span class="kpi-value" id="kpiValue1">0</span>
+      </div>
+      <div class="kpi-card glass">
+        <span class="kpi-label" id="kpiLabel2">Alumni reached</span>
+        <span class="kpi-value" id="kpiValue2">0</span>
+      </div>
+      <div class="kpi-card glass">
+        <span class="kpi-label">City mentions</span>
+        <span class="kpi-value" id="kpiValue3">0</span>
+        <span class="kpi-delta" id="kpiDelta"><span id="kpiDeltaLabel">across selection</span></span>
+      </div>
+      <div class="kpi-card glass">
+        <span class="kpi-label">Top city</span>
+        <span class="kpi-value" id="kpiValue4" style="font-size:16px;">—</span>
+      </div>
+    </div>
+
+    <div class="metric-overlay glass">
+      <span class="metric-title">Cohort</span>
+      <button class="metric-btn active" data-cohort="all"><span class="metric-dot"></span>All years (2006–11)</button>
+      <button class="metric-btn" data-cohort="early"><span class="metric-dot"></span>Early (2006–08)</button>
+      <button class="metric-btn" data-cohort="late"><span class="metric-dot"></span>Later (2009–11)</button>
+    </div>
+
+    <div class="map-footnote glass" id="footnote">
+      Showing <strong id="footnoteCount">0</strong> cities · <strong id="footnoteRegion">Global</strong>
+      <span class="clear-btn" id="clearSelection" style="display:none;">clear selection</span>
+    </div>
+  </div>
+
+  <div class="chart-zone">
+    <div class="chart-panel glass">
+      <div class="chart-head">
+        <div>
+          <h3 id="lineChartTitle">Graduating class distribution</h3>
+          <p id="lineChartSub">Alumni per year, across all active cities in view</p>
+        </div>
+        <span class="chart-badge" id="lineChartBadge">2006–2011</span>
+      </div>
+      <div class="chart-canvas-wrap"><canvas id="lineChart"></canvas></div>
+    </div>
+
+    <div class="chart-panel glass">
+      <div class="chart-head">
+        <div>
+          <h3 id="barChartTitle">Leading cities</h3>
+          <p id="barChartSub">Ranked by alumni mentions</p>
+        </div>
+        <span class="chart-badge" id="barChartBadge">Top 8</span>
+      </div>
+      <div class="bar-list" id="barList"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+
+/* =========================================================
+   1. ALUMNI DATA — reproduced from the "Keep it simple" dummy
+      dataset (70 fictional ID2 alumni, seed 42)
+   ========================================================= */
+const ALUMNI = [{"id": 1, "name": "Nina Hofer", "gradYear": 2011, "cities": ["Copenhagen, Denmark", "Stockholm, Sweden", "Zurich, Switzerland"], "primaryIndustry": "Consumer Electronics"}, {"id": 2, "name": "Felix Berger", "gradYear": 2007, "cities": ["Dubai, UAE", "Graz, Austria"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 3, "name": "Anna Huber", "gradYear": 2011, "cities": ["Tokyo, Japan", "Paris, France", "Basel, Switzerland", "Manchester, UK"], "primaryIndustry": "Consumer Electronics"}, {"id": 4, "name": "Florian Bauer", "gradYear": 2011, "cities": ["Melbourne, Australia", "Turin, Italy", "Singapore, Singapore", "Stuttgart, Germany"], "primaryIndustry": "Consumer Electronics"}, {"id": 5, "name": "Benedikt Berger", "gradYear": 2007, "cities": ["Singapore, Singapore"], "primaryIndustry": "B2B - Industrial Goods"}, {"id": 6, "name": "Isabel Mueller", "gradYear": 2010, "cities": ["Melbourne, Australia", "Copenhagen, Denmark"], "primaryIndustry": "Healthcare / Medical"}, {"id": 7, "name": "Chen Wagner", "gradYear": 2007, "cities": ["Shenzhen, China"], "primaryIndustry": "B2B - Industrial Goods"}, {"id": 8, "name": "Leila Novak", "gradYear": 2007, "cities": ["Zurich, Switzerland", "Copenhagen, Denmark", "Auckland, New Zealand"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 9, "name": "Max Wagner", "gradYear": 2006, "cities": ["Eindhoven, Netherlands", "Portland, USA"], "primaryIndustry": "Public Sector / Social Impact"}, {"id": 10, "name": "Miriam Fuchs", "gradYear": 2006, "cities": ["Melbourne, Australia"], "primaryIndustry": "Public Sector / Social Impact"}, {"id": 11, "name": "Florian Costa", "gradYear": 2007, "cities": ["Milan, Italy", "Shanghai, China", "Dubai, UAE", "London, UK", "Basel, Switzerland"], "primaryIndustry": "B2B - Industrial Goods"}, {"id": 12, "name": "Priya Brunner", "gradYear": 2007, "cities": ["Copenhagen, Denmark"], "primaryIndustry": "Research / Academia"}, {"id": 13, "name": "Sarah Moser", "gradYear": 2011, "cities": ["Auckland, New Zealand", "Eindhoven, Netherlands", "Helsinki, Finland", "Cape Town, South Africa"], "primaryIndustry": "Public Sector / Social Impact"}, {"id": 14, "name": "Erik Steiner", "gradYear": 2007, "cities": ["Berlin, Germany", "Tokyo, Japan"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 15, "name": "Paul Wagner", "gradYear": 2007, "cities": ["Linz, Austria"], "primaryIndustry": "Research / Academia"}, {"id": 16, "name": "Emma Winkler", "gradYear": 2009, "cities": ["London, UK", "Milan, Italy", "Portland, USA", "Osaka, Japan"], "primaryIndustry": "Automotive / Mobility"}, {"id": 17, "name": "Mateo Pichler", "gradYear": 2007, "cities": ["London, UK", "Melbourne, Australia"], "primaryIndustry": "Research / Academia"}, {"id": 18, "name": "Lena Wagner", "gradYear": 2011, "cities": ["Vienna, Austria", "Stuttgart, Germany", "Copenhagen, Denmark", "Eindhoven, Netherlands", "Palo Alto, USA"], "primaryIndustry": "Automotive / Mobility"}, {"id": 19, "name": "Rafael Egger", "gradYear": 2009, "cities": ["Portland, USA", "Auckland, New Zealand", "Mexico City, Mexico"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 20, "name": "Dario Wagner", "gradYear": 2011, "cities": ["Munich, Germany", "Sao Paulo, Brazil", "Dubai, UAE"], "primaryIndustry": "Furniture / Interior / Consumer Goods"}, {"id": 21, "name": "Theresa Andersson", "gradYear": 2006, "cities": ["Copenhagen, Denmark", "Linz, Austria", "Stuttgart, Germany", "Palo Alto, USA", "Cape Town, South Africa"], "primaryIndustry": "B2B - Industrial Goods"}, {"id": 22, "name": "Sarah Brunner", "gradYear": 2009, "cities": ["Berlin, Germany", "Vienna, Austria", "New York, USA"], "primaryIndustry": "other"}, {"id": 23, "name": "Sarah Kowalski", "gradYear": 2006, "cities": ["Seoul, South Korea", "Barcelona, Spain"], "primaryIndustry": "other"}, {"id": 24, "name": "Franziska Pichler", "gradYear": 2007, "cities": ["Turin, Italy", "Milan, Italy", "Auckland, New Zealand"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 25, "name": "Marta Egger", "gradYear": 2006, "cities": ["Portland, USA"], "primaryIndustry": "Furniture / Interior / Consumer Goods"}, {"id": 26, "name": "Ana Fuchs", "gradYear": 2011, "cities": ["Auckland, New Zealand", "Vienna, Austria", "Turin, Italy", "Berlin, Germany"], "primaryIndustry": "B2B - Industrial Goods"}, {"id": 27, "name": "Bruno Moser", "gradYear": 2006, "cities": ["Seoul, South Korea", "Linz, Austria", "Osaka, Japan"], "primaryIndustry": "B2B - Industrial Goods"}, {"id": 28, "name": "Andreas Winkler", "gradYear": 2007, "cities": ["Palo Alto, USA", "Graz, Austria"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 29, "name": "David Nguyen", "gradYear": 2006, "cities": ["Stockholm, Sweden", "London, UK", "New York, USA", "Osaka, Japan"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 30, "name": "Julia Wolf", "gradYear": 2008, "cities": ["San Francisco, USA", "Melbourne, Australia", "Tokyo, Japan", "Graz, Austria", "Turin, Italy"], "primaryIndustry": "Consumer Electronics"}, {"id": 31, "name": "Yuki Rossi", "gradYear": 2010, "cities": ["Turin, Italy", "Singapore, Singapore", "London, UK", "Helsinki, Finland", "Linz, Austria"], "primaryIndustry": "Consumer Electronics"}, {"id": 32, "name": "Tobias Brunner", "gradYear": 2010, "cities": ["Palo Alto, USA", "Shenzhen, China", "San Francisco, USA"], "primaryIndustry": "Public Sector / Social Impact"}, {"id": 33, "name": "Hannah Krenn", "gradYear": 2010, "cities": ["San Francisco, USA", "Auckland, New Zealand", "Vienna, Austria"], "primaryIndustry": "B2B - Industrial Goods"}, {"id": 34, "name": "Christoph Costa", "gradYear": 2009, "cities": ["Stuttgart, Germany", "Barcelona, Spain"], "primaryIndustry": "Healthcare / Medical"}, {"id": 35, "name": "Felix Bauer", "gradYear": 2007, "cities": ["Berlin, Germany", "New York, USA", "Palo Alto, USA", "London, UK"], "primaryIndustry": "Automotive / Mobility"}, {"id": 36, "name": "Hannah Larsen", "gradYear": 2009, "cities": ["Auckland, New Zealand"], "primaryIndustry": "Furniture / Interior / Consumer Goods"}, {"id": 37, "name": "Yuki Dubois", "gradYear": 2010, "cities": ["Portland, USA", "Auckland, New Zealand", "Chicago, USA", "Eindhoven, Netherlands", "Sao Paulo, Brazil"], "primaryIndustry": "Healthcare / Medical"}, {"id": 38, "name": "Theresa Wolf", "gradYear": 2009, "cities": ["Barcelona, Spain"], "primaryIndustry": "B2B - Industrial Goods"}, {"id": 39, "name": "Andreas Lechner", "gradYear": 2009, "cities": ["Manchester, UK", "Berlin, Germany"], "primaryIndustry": "Public Sector / Social Impact"}, {"id": 40, "name": "Mika Nguyen", "gradYear": 2010, "cities": ["Singapore, Singapore"], "primaryIndustry": "Public Sector / Social Impact"}, {"id": 41, "name": "Dario Schwarz", "gradYear": 2007, "cities": ["Stockholm, Sweden", "Paris, France", "Portland, USA", "Mexico City, Mexico"], "primaryIndustry": "B2B - Industrial Goods"}, {"id": 42, "name": "Victor Moser", "gradYear": 2010, "cities": ["Graz, Austria", "San Francisco, USA", "Stuttgart, Germany", "Portland, USA", "Zurich, Switzerland"], "primaryIndustry": "B2B - Industrial Goods"}, {"id": 43, "name": "Mateo Nguyen", "gradYear": 2008, "cities": ["Helsinki, Finland", "Stuttgart, Germany", "Sao Paulo, Brazil", "Graz, Austria"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 44, "name": "Felix Winkler", "gradYear": 2007, "cities": ["Basel, Switzerland"], "primaryIndustry": "Consumer Electronics"}, {"id": 45, "name": "Miriam Silva", "gradYear": 2007, "cities": ["Turin, Italy", "Eindhoven, Netherlands", "Shanghai, China", "Milan, Italy", "Graz, Austria"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 46, "name": "Daniel Pichler", "gradYear": 2011, "cities": ["Turin, Italy", "Linz, Austria", "Osaka, Japan"], "primaryIndustry": "B2B - Industrial Goods"}, {"id": 47, "name": "Marta Pichler", "gradYear": 2009, "cities": ["New York, USA", "Basel, Switzerland", "Portland, USA"], "primaryIndustry": "other"}, {"id": 48, "name": "Isabel Tanaka", "gradYear": 2007, "cities": ["Paris, France"], "primaryIndustry": "Public Sector / Social Impact"}, {"id": 49, "name": "Chen Fischer", "gradYear": 2009, "cities": ["Osaka, Japan", "Helsinki, Finland"], "primaryIndustry": "Automotive / Mobility"}, {"id": 50, "name": "Theresa Kim", "gradYear": 2009, "cities": ["Copenhagen, Denmark", "Sao Paulo, Brazil", "Mexico City, Mexico", "Chicago, USA", "Graz, Austria"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 51, "name": "Georg Reiter", "gradYear": 2008, "cities": ["Auckland, New Zealand", "Cape Town, South Africa", "Osaka, Japan", "Portland, USA"], "primaryIndustry": "Healthcare / Medical"}, {"id": 52, "name": "Vera Tanaka", "gradYear": 2006, "cities": ["Amsterdam, Netherlands", "London, UK", "Manchester, UK", "Sao Paulo, Brazil", "Paris, France"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 53, "name": "Lukas Schmidt", "gradYear": 2007, "cities": ["Linz, Austria", "Munich, Germany", "Auckland, New Zealand"], "primaryIndustry": "Automotive / Mobility"}, {"id": 54, "name": "Leo Dubois", "gradYear": 2008, "cities": ["Munich, Germany", "Helsinki, Finland"], "primaryIndustry": "Consumer Electronics"}, {"id": 55, "name": "Laura Mayer", "gradYear": 2007, "cities": ["Shanghai, China", "Stuttgart, Germany", "Copenhagen, Denmark", "Turin, Italy", "Auckland, New Zealand"], "primaryIndustry": "Healthcare / Medical"}, {"id": 56, "name": "Simon Krenn", "gradYear": 2011, "cities": ["Manchester, UK"], "primaryIndustry": "Furniture / Interior / Consumer Goods"}, {"id": 57, "name": "Paul Huber", "gradYear": 2006, "cities": ["Chicago, USA", "Sao Paulo, Brazil", "Barcelona, Spain", "Linz, Austria"], "primaryIndustry": "Research / Academia"}, {"id": 58, "name": "Florian Reiter", "gradYear": 2011, "cities": ["Portland, USA", "Turin, Italy"], "primaryIndustry": "Furniture / Interior / Consumer Goods"}, {"id": 59, "name": "Georg Schwarz", "gradYear": 2011, "cities": ["Barcelona, Spain", "Chicago, USA", "Turin, Italy", "New York, USA", "Shanghai, China"], "primaryIndustry": "Automotive / Mobility"}, {"id": 60, "name": "Miriam Hofer", "gradYear": 2006, "cities": ["Graz, Austria", "Paris, France"], "primaryIndustry": "Research / Academia"}, {"id": 61, "name": "Jakob Fischer", "gradYear": 2010, "cities": ["Mexico City, Mexico", "Stuttgart, Germany", "Sao Paulo, Brazil", "Osaka, Japan"], "primaryIndustry": "Furniture / Interior / Consumer Goods"}, {"id": 62, "name": "Jan Eder", "gradYear": 2011, "cities": ["Auckland, New Zealand", "Linz, Austria", "New York, USA", "Stuttgart, Germany"], "primaryIndustry": "Public Sector / Social Impact"}, {"id": 63, "name": "Dario Novak", "gradYear": 2009, "cities": ["London, UK"], "primaryIndustry": "Automotive / Mobility"}, {"id": 64, "name": "Sarah Eder", "gradYear": 2009, "cities": ["Turin, Italy", "Graz, Austria", "Copenhagen, Denmark", "Eindhoven, Netherlands"], "primaryIndustry": "Public Sector / Social Impact"}, {"id": 65, "name": "Nina Novak", "gradYear": 2006, "cities": ["Mexico City, Mexico", "Barcelona, Spain"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 66, "name": "Rafael Leitner", "gradYear": 2010, "cities": ["Zurich, Switzerland", "Berlin, Germany", "Paris, France", "Palo Alto, USA", "Tokyo, Japan"], "primaryIndustry": "Healthcare / Medical"}, {"id": 67, "name": "Marta Mayer", "gradYear": 2009, "cities": ["Sao Paulo, Brazil", "Osaka, Japan", "Tokyo, Japan", "Auckland, New Zealand", "Melbourne, Australia"], "primaryIndustry": "Digital / Software / UX/UI"}, {"id": 68, "name": "Zoe Bauer", "gradYear": 2008, "cities": ["Singapore, Singapore", "Basel, Switzerland", "Mexico City, Mexico", "Linz, Austria"], "primaryIndustry": "Consumer Electronics"}, {"id": 69, "name": "Nadia Gruber", "gradYear": 2011, "cities": ["Palo Alto, USA", "Basel, Switzerland"], "primaryIndustry": "Healthcare / Medical"}, {"id": 70, "name": "Leila Berger", "gradYear": 2008, "cities": ["Singapore, Singapore", "Shenzhen, China", "Mexico City, Mexico", "Melbourne, Australia", "Linz, Austria"], "primaryIndustry": "Healthcare / Medical"}];
+
+const CITY_META = {"Vienna, Austria": {"lat": 48.2082, "lng": 16.3738, "region": "eu"}, "Graz, Austria": {"lat": 47.0707, "lng": 15.4395, "region": "eu"}, "Linz, Austria": {"lat": 48.3069, "lng": 14.2858, "region": "eu"}, "Munich, Germany": {"lat": 48.1351, "lng": 11.582, "region": "eu"}, "Berlin, Germany": {"lat": 52.52, "lng": 13.405, "region": "eu"}, "Stuttgart, Germany": {"lat": 48.7758, "lng": 9.1829, "region": "eu"}, "Milan, Italy": {"lat": 45.4642, "lng": 9.19, "region": "eu"}, "Turin, Italy": {"lat": 45.0703, "lng": 7.6869, "region": "eu"}, "Zurich, Switzerland": {"lat": 47.3769, "lng": 8.5417, "region": "eu"}, "Basel, Switzerland": {"lat": 47.5596, "lng": 7.5886, "region": "eu"}, "Eindhoven, Netherlands": {"lat": 51.4416, "lng": 5.4697, "region": "eu"}, "Amsterdam, Netherlands": {"lat": 52.3676, "lng": 4.9041, "region": "eu"}, "London, UK": {"lat": 51.5072, "lng": -0.1276, "region": "eu"}, "Manchester, UK": {"lat": 53.4808, "lng": -2.2426, "region": "eu"}, "Stockholm, Sweden": {"lat": 59.3293, "lng": 18.0686, "region": "eu"}, "Copenhagen, Denmark": {"lat": 55.6761, "lng": 12.5683, "region": "eu"}, "Helsinki, Finland": {"lat": 60.1699, "lng": 24.9384, "region": "eu"}, "Paris, France": {"lat": 48.8566, "lng": 2.3522, "region": "eu"}, "Barcelona, Spain": {"lat": 41.3851, "lng": 2.1734, "region": "eu"}, "Shanghai, China": {"lat": 31.2304, "lng": 121.4737, "region": "apac"}, "Shenzhen, China": {"lat": 22.5431, "lng": 114.0579, "region": "apac"}, "Tokyo, Japan": {"lat": 35.6762, "lng": 139.6503, "region": "apac"}, "Osaka, Japan": {"lat": 34.6937, "lng": 135.5023, "region": "apac"}, "Seoul, South Korea": {"lat": 37.5665, "lng": 126.978, "region": "apac"}, "Singapore, Singapore": {"lat": 1.3521, "lng": 103.8198, "region": "apac"}, "San Francisco, USA": {"lat": 37.7749, "lng": -122.4194, "region": "na"}, "Palo Alto, USA": {"lat": 37.4419, "lng": -122.143, "region": "na"}, "Portland, USA": {"lat": 45.5152, "lng": -122.6784, "region": "na"}, "Chicago, USA": {"lat": 41.8781, "lng": -87.6298, "region": "na"}, "New York, USA": {"lat": 40.7128, "lng": -74.006, "region": "na"}, "Sao Paulo, Brazil": {"lat": -23.5505, "lng": -46.6333, "region": "other"}, "Mexico City, Mexico": {"lat": 19.4326, "lng": -99.1332, "region": "na"}, "Dubai, UAE": {"lat": 25.2048, "lng": 55.2708, "region": "other"}, "Cape Town, South Africa": {"lat": -33.9249, "lng": 18.4241, "region": "other"}, "Melbourne, Australia": {"lat": -37.8136, "lng": 144.9631, "region": "apac"}, "Auckland, New Zealand": {"lat": -36.8485, "lng": 174.7633, "region": "apac"}};
+
+const REGION_LABEL = { global:'Global', na:'North America', eu:'Europe', apac:'Asia-Pacific' };
+const COHORT_META = {
+  all:   { label:'All years',  color:'#00f2fe', soft:'rgba(0,242,254,0.16)', test: () => true },
+  early: { label:'Early (2006–08)', color:'#7000ff', soft:'rgba(112,0,255,0.18)', test: y => y <= 2008 },
+  late:  { label:'Later (2009–11)', color:'#00f5a0', soft:'rgba(0,245,160,0.16)', test: y => y >= 2009 },
+};
+const YEARS = [2006,2007,2008,2009,2010,2011];
+
+/* =========================================================
+   2. STATE
+   ========================================================= */
+const state = { region:'global', cohort:'all', selectedCity:null };
+
+/* =========================================================
+   3. DATA HELPERS
+   ========================================================= */
+function cityMeta(key){ return CITY_META[key]; }
+function shortName(key){ return key.split(',')[0].trim(); }
+function countryName(key){ return key.split(',').slice(1).join(',').trim(); }
+
+// Alumni matching the current cohort filter
+function cohortAlumni(){
+  const test = COHORT_META[state.cohort].test;
+  return ALUMNI.filter(a => test(a.gradYear));
+}
+
+// Alumni matching cohort + region (region = any of their cities falls in region)
+function regionAlumni(){
+  const base = cohortAlumni();
+  if (state.region === 'global') return base;
+  return base.filter(a => a.cities.some(c => cityMeta(c).region === state.region));
+}
+
+// Final filtered alumni set given region + cohort + optional selected city
+function filteredAlumni(){
+  if (state.selectedCity){
+    return cohortAlumni().filter(a => a.cities.includes(state.selectedCity));
+  }
+  return regionAlumni();
+}
+
+// City -> count of filtered alumni who list that city, restricted to region if global not selected
+function computeCityCounts(){
+  const alumni = state.selectedCity ? cohortAlumni() : regionAlumni();
+  const counts = {};
+  alumni.forEach(a => {
+    a.cities.forEach(c => {
+      const meta = cityMeta(c);
+      if (state.region !== 'global' && meta.region !== state.region) return;
+      counts[c] = (counts[c] || 0) + 1;
+    });
+  });
+  return counts;
+}
+
+function visibleCityKeys(){
+  const counts = computeCityCounts();
+  return Object.keys(counts).filter(k => counts[k] > 0);
+}
+
+/* =========================================================
+   4. MAP INIT
+   ========================================================= */
+const map = L.map('map', {
+  zoomControl: false, attributionControl: true, worldCopyJump: true, minZoom: 2, maxZoom: 8,
+}).setView([25, 20], 2);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19,
+}).addTo(map);
+
+// Thin vector country-border overlay, drawn on top of the base tiles
+fetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json')
+  .then(res => res.json())
+  .then(topology => {
+    const geojson = topojson.feature(topology, topology.objects.countries);
+    L.geoJSON(geojson, {
+      interactive: false,
+      style: {
+        color: 'rgba(233,236,245,0.32)',
+        weight: 0.7,
+        fill: true,
+        fillColor: '#0b0f19',
+        fillOpacity: 0.001,
+        lineJoin: 'round',
+      }
+    }).addTo(map);
+  })
+  .catch(() => { /* border overlay is decorative — fail silently if the CDN is unreachable */ });
+
+const markerLayer = L.layerGroup().addTo(map);
+
+function fmt(v, decimals=0){ return v.toLocaleString(undefined, { maximumFractionDigits: decimals }); }
+
+function radiusScale(counts, key){
+  const vals = Object.values(counts);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const v = counts[key];
+  const t = (v - min) / (max - min || 1);
+  return 12 + t * 22;
+}
+
+function buildIcon(size, color, isSelected, isDim){
+  const cls = ['node-marker', isSelected ? 'selected' : '', isDim ? 'dim' : ''].join(' ').trim();
+  const html = `
+    <div class="${cls}" style="width:${size}px;height:${size}px;color:${color};">
+      <div class="pulse" style="background:${color};"></div>
+      <div class="core" style="background:${color}; box-shadow:0 0 ${size*0.9}px ${size*0.35}px ${color}66, inset 0 0 6px rgba(255,255,255,0.5);"></div>
+    </div>`;
+  return L.divIcon({ html, className: '', iconSize: [size, size], iconAnchor: [size/2, size/2] });
+}
+
+function renderMarkers(){
+  markerLayer.clearLayers();
+  const counts = computeCityCounts();
+  const keys = Object.keys(counts).filter(k => counts[k] > 0);
+  if (!keys.length) return;
+  const cohortColor = COHORT_META[state.cohort].color;
+
+  keys.forEach(key => {
+    const meta = cityMeta(key);
+    const isSelected = state.selectedCity === key;
+    const isDim = state.selectedCity && !isSelected;
+    const size = radiusScale(counts, key);
+    const icon = buildIcon(size, cohortColor, isSelected, isDim);
+    const marker = L.marker([meta.lat, meta.lng], { icon, riseOnHover: true });
+
+    const perCohortAll = {
+      all: ALUMNI.filter(a => a.cities.includes(key)).length,
+      early: ALUMNI.filter(a => a.cities.includes(key) && a.gradYear <= 2008).length,
+      late: ALUMNI.filter(a => a.cities.includes(key) && a.gradYear >= 2009).length,
+    };
+    const tooltipHtml = `
+      <div class="tt-city">${shortName(key)}</div>
+      <div class="tt-region">${countryName(key)} · ${REGION_LABEL[meta.region] || 'Other'}</div>
+      <div class="tt-row"><span>All years</span><b>${perCohortAll.all} alumni</b></div>
+      <div class="tt-row"><span>2006–08</span><b>${perCohortAll.early}</b></div>
+      <div class="tt-row"><span>2009–11</span><b>${perCohortAll.late}</b></div>
+    `;
+    marker.bindTooltip(tooltipHtml, { className: 'leaflet-tooltip-glass', direction: 'top', offset: [0,-8] });
+    marker.on('mouseover', () => {
+      const el = marker.getTooltip()._container;
+      if (el) el.style.setProperty('--tooltip-glow', cohortColor + '55');
+    });
+    marker.on('click', () => selectCity(key));
+    marker.addTo(markerLayer);
+  });
+}
+
+/* =========================================================
+   5. COUNT-UP
+   ========================================================= */
+function countUp(el, to, opts={}){
+  const decimals = opts.decimals ?? 0;
+  const from = parseFloat(el.dataset.raw || 0);
+  const dur = 650;
+  const t0 = performance.now();
+  function tick(now){
+    const p = Math.min(1, (now - t0) / dur);
+    const eased = 1 - Math.pow(1 - p, 3);
+    const val = from + (to - from) * eased;
+    el.textContent = fmt(val, decimals);
+    if (p < 1) requestAnimationFrame(tick);
+    else el.dataset.raw = to;
+  }
+  requestAnimationFrame(tick);
+}
+
+/* =========================================================
+   6. CHARTS
+   ========================================================= */
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.color = '#8b93a7';
+
+const lineCtx = document.getElementById('lineChart').getContext('2d');
+function makeGradient(color){
+  const g = lineCtx.createLinearGradient(0, 0, 0, 260);
+  g.addColorStop(0, color + '55');
+  g.addColorStop(1, color + '00');
+  return g;
+}
+
+const lineChart = new Chart(lineCtx, {
+  type: 'line',
+  data: { labels: YEARS, datasets: [{
+    data: [], borderColor: COHORT_META.all.color, backgroundColor: makeGradient(COHORT_META.all.color),
+    borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: COHORT_META.all.color, pointBorderColor: 'transparent',
+    pointHoverRadius: 6, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: COHORT_META.all.color,
+    tension: 0.35, fill: true,
+  }]},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { intersect: false, mode: 'index' },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(13,17,27,0.95)', borderColor: 'rgba(255,255,255,0.12)', borderWidth: 1,
+        titleColor: '#e9ecf5', bodyColor: '#9aa2b8', padding: 10, cornerRadius: 10, displayColors: false,
+        callbacks: { label: (ctx) => `${ctx.parsed.y} alumni` }
+      }
+    },
+    scales: {
+      x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11 } } },
+      y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: { display: false }, ticks: { font: { size: 11 }, precision: 0, maxTicksLimit: 5 } }
+    }
+  }
+});
+
+function updateLineChart(){
+  const alumni = filteredAlumni();
+  const meta = COHORT_META[state.cohort];
+  const counts = YEARS.map(y => alumni.filter(a => a.gradYear === y).length);
+
+  lineChart.data.datasets[0].data = counts;
+  lineChart.data.datasets[0].borderColor = meta.color;
+  lineChart.data.datasets[0].backgroundColor = makeGradient(meta.color);
+  lineChart.data.datasets[0].pointBackgroundColor = meta.color;
+  lineChart.data.datasets[0].pointHoverBorderColor = meta.color;
+  lineChart.update();
+
+  const titleEl = document.getElementById('lineChartTitle');
+  const subEl = document.getElementById('lineChartSub');
+  if (state.selectedCity){
+    titleEl.textContent = `${shortName(state.selectedCity)} — class distribution`;
+    subEl.textContent = `Alumni active in ${shortName(state.selectedCity)}, by graduation year`;
+  } else {
+    titleEl.textContent = 'Graduating class distribution';
+    subEl.textContent = `Alumni per year across ${REGION_LABEL[state.region].toLowerCase()} cities in view`;
+  }
+  const badge = document.getElementById('lineChartBadge');
+  badge.style.background = meta.soft; badge.style.color = meta.color;
+}
+
+function renderBarList(){
+  const list = document.getElementById('barList');
+  const meta = COHORT_META[state.cohort];
+  list.innerHTML = '';
+
+  if (state.selectedCity){
+    // Breakdown: industries alumni from this city work in today
+    document.getElementById('barChartTitle').textContent = 'Industries today';
+    document.getElementById('barChartSub').textContent = `Where ${shortName(state.selectedCity)} alumni work now`;
+    document.getElementById('barChartBadge').textContent = 'By industry';
+
+    const alumni = filteredAlumni();
+    const tally = {};
+    alumni.forEach(a => { tally[a.primaryIndustry] = (tally[a.primaryIndustry] || 0) + 1; });
+    const rows = Object.entries(tally).sort((a,b) => b[1]-a[1]);
+    const max = rows.length ? rows[0][1] : 1;
+
+    rows.forEach(([industry, count], i) => {
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      row.style.cursor = 'default';
+      const pct = (count / max) * 100;
+      row.innerHTML = `
+        <span class="rank">${i+1}</span>
+        <div class="meta"><div class="city">${industry}</div><div class="region">&nbsp;</div></div>
+        <div class="bar-track"><div class="bar-fill" style="width:0%;"></div></div>
+        <span class="val">${count}</span>`;
+      list.appendChild(row);
+      requestAnimationFrame(() => {
+        const fillEl = row.querySelector('.bar-fill');
+        fillEl.style.background = `linear-gradient(90deg, ${meta.color}, ${meta.color}cc)`;
+        fillEl.style.boxShadow = `0 0 10px 0 ${meta.color}`;
+        setTimeout(() => { fillEl.style.width = pct + '%'; }, 30 + i*40);
+      });
+    });
+    return;
+  }
+
+  document.getElementById('barChartTitle').textContent = 'Leading cities';
+  document.getElementById('barChartSub').textContent = `Ranked by alumni mentions · ${meta.label.toLowerCase()}`;
+  document.getElementById('barChartBadge').textContent = 'Top 8';
+
+  const counts = computeCityCounts();
+  const rows = Object.entries(counts).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1]).slice(0,8);
+  const max = rows.length ? rows[0][1] : 1;
+
+  rows.forEach(([key, count], i) => {
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    const pct = (count / max) * 100;
+    row.innerHTML = `
+      <span class="rank">${i+1}</span>
+      <div class="meta"><div class="city">${shortName(key)}</div><div class="region">${countryName(key)}</div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:0%;"></div></div>
+      <span class="val">${count}</span>`;
+    row.addEventListener('click', () => selectCity(key));
+    list.appendChild(row);
+    requestAnimationFrame(() => {
+      const fillEl = row.querySelector('.bar-fill');
+      fillEl.style.background = `linear-gradient(90deg, ${meta.color}, ${meta.color}cc)`;
+      fillEl.style.boxShadow = `0 0 10px 0 ${meta.color}`;
+      setTimeout(() => { fillEl.style.width = pct + '%'; }, 30 + i*40);
+    });
+  });
+}
+
+/* =========================================================
+   7. RENDER / UPDATE CYCLE
+   ========================================================= */
+function applyAccentVars(){
+  const meta = COHORT_META[state.cohort];
+  document.documentElement.style.setProperty('--accent', meta.color);
+  document.documentElement.style.setProperty('--accent-soft', meta.soft);
+}
+
+function updateKPIs(){
+  const alumni = filteredAlumni();
+  const cityKeys = state.selectedCity ? [state.selectedCity] : visibleCityKeys();
+  const counts = computeCityCounts();
+  const totalMentions = state.selectedCity
+    ? (counts[state.selectedCity] || 0)
+    : Object.values(counts).reduce((a,b)=>a+b, 0);
+
+  document.getElementById('kpiLabel1').textContent = state.selectedCity ? 'Selected city' : 'Active cities';
+  countUp(document.getElementById('kpiValue1'), state.selectedCity ? 1 : cityKeys.length);
+
+  document.getElementById('kpiLabel2').textContent = 'Alumni reached';
+  countUp(document.getElementById('kpiValue2'), alumni.length);
+
+  countUp(document.getElementById('kpiValue3'), totalMentions);
+  document.getElementById('kpiDeltaLabel').textContent = state.selectedCity
+    ? `for ${shortName(state.selectedCity)}`
+    : `across ${REGION_LABEL[state.region].toLowerCase()}`;
+
+  let topLabel = '—';
+  if (state.selectedCity){
+    topLabel = shortName(state.selectedCity);
+  } else {
+    const rows = Object.entries(counts).filter(([,v]) => v>0).sort((a,b) => b[1]-a[1]);
+    if (rows.length) topLabel = shortName(rows[0][0]);
+  }
+  document.getElementById('kpiValue4').textContent = topLabel;
+}
+
+function updateFootnote(){
+  const clearBtn = document.getElementById('clearSelection');
+  const footnote = document.getElementById('footnote');
+  if (state.selectedCity){
+    clearBtn.style.display = 'inline';
+    footnote.firstChild.textContent = 'Selected ';
+    document.getElementById('footnoteCount').textContent = shortName(state.selectedCity);
+    document.getElementById('footnoteRegion').textContent = countryName(state.selectedCity);
+  } else {
+    clearBtn.style.display = 'none';
+    footnote.firstChild.textContent = 'Showing ';
+    document.getElementById('footnoteCount').textContent = visibleCityKeys().length;
+    document.getElementById('footnoteRegion').textContent = REGION_LABEL[state.region];
+  }
+}
+
+function refreshAll(){
+  applyAccentVars();
+  renderMarkers();
+  updateKPIs();
+  updateLineChart();
+  renderBarList();
+  updateFootnote();
+}
+
+/* =========================================================
+   8. INTERACTIONS
+   ========================================================= */
+function selectCity(key){
+  state.selectedCity = (state.selectedCity === key) ? null : key;
+  if (state.selectedCity){
+    const meta = cityMeta(key);
+    map.flyTo([meta.lat, meta.lng], 5, { duration: 0.9 });
+  }
+  refreshAll();
+}
+
+function moveTabBg(activeBtn){
+  const bg = document.getElementById('tabBg');
+  bg.style.left = activeBtn.offsetLeft + 'px';
+  bg.style.width = activeBtn.offsetWidth + 'px';
+}
+
+const regionBounds = {
+  global: [[-50,-160],[65,150]],
+  na:     [[14,-125],[55,-70]],
+  eu:     [[40,-12],[62,25]],
+  apac:   [[-38,70],[42,145]],
+};
+
+document.querySelectorAll('.region-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.region-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    moveTabBg(btn);
+    state.region = btn.dataset.region;
+    state.selectedCity = null;
+    map.flyToBounds(regionBounds[state.region], { duration: 0.9, padding: [40,40] });
+    refreshAll();
+  });
+});
+
+document.querySelectorAll('.metric-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.metric-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.cohort = btn.dataset.cohort;
+    refreshAll();
+  });
+});
+
+document.getElementById('clearSelection').addEventListener('click', (e) => {
+  e.stopPropagation();
+  state.selectedCity = null;
+  refreshAll();
+});
+
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  state.region = 'global'; state.selectedCity = null; state.cohort = 'all';
+  document.querySelectorAll('.region-tab').forEach(b => b.classList.remove('active'));
+  document.querySelector('.region-tab[data-region="global"]').classList.add('active');
+  moveTabBg(document.querySelector('.region-tab[data-region="global"]'));
+  document.querySelectorAll('.metric-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.metric-btn[data-cohort="all"]').classList.add('active');
+  map.flyToBounds(regionBounds.global, { duration: 0.9 });
+  refreshAll();
+});
+
+let panelsHidden = false;
+document.getElementById('expandBtn').addEventListener('click', () => {
+  panelsHidden = !panelsHidden;
+  document.querySelectorAll('.kpi-overlay, .metric-overlay').forEach(el => {
+    el.style.opacity = panelsHidden ? '0' : '1';
+    el.style.pointerEvents = panelsHidden ? 'none' : 'auto';
+  });
+});
+
+/* ---- Search ---- */
+const searchInput = document.getElementById('searchInput');
+const autocomplete = document.getElementById('autocomplete');
+let hiIndex = -1;
+const ALL_CITY_KEYS = Object.keys(CITY_META);
+
+function renderAutocomplete(query){
+  const q = query.trim().toLowerCase();
+  if (!q){ autocomplete.classList.remove('open'); autocomplete.innerHTML=''; return; }
+  const matches = ALL_CITY_KEYS.filter(k => k.toLowerCase().includes(q)).slice(0, 8);
+
+  if (!matches.length){
+    autocomplete.innerHTML = `<div class="autocomplete-item"><span>No cities found</span></div>`;
+    autocomplete.classList.add('open');
+    return;
+  }
+
+  autocomplete.innerHTML = matches.map((k, i) => `
+    <div class="autocomplete-item" data-key="${k}" data-i="${i}">
+      <span>${shortName(k)}</span><small>${countryName(k)}</small>
+    </div>`).join('');
+  autocomplete.classList.add('open');
+  hiIndex = -1;
+
+  autocomplete.querySelectorAll('.autocomplete-item[data-key]').forEach(item => {
+    item.addEventListener('click', () => {
+      const key = item.dataset.key;
+      searchInput.value = shortName(key);
+      autocomplete.classList.remove('open');
+      state.region = 'global';
+      document.querySelectorAll('.region-tab').forEach(b => b.classList.remove('active'));
+      document.querySelector('.region-tab[data-region="global"]').classList.add('active');
+      moveTabBg(document.querySelector('.region-tab[data-region="global"]'));
+      selectCity(key);
+    });
+  });
+}
+
+searchInput.addEventListener('input', (e) => renderAutocomplete(e.target.value));
+searchInput.addEventListener('focus', (e) => { if(e.target.value) renderAutocomplete(e.target.value); });
+searchInput.addEventListener('keydown', (e) => {
+  const items = [...autocomplete.querySelectorAll('.autocomplete-item[data-key]')];
+  if (!items.length) return;
+  if (e.key === 'ArrowDown'){ e.preventDefault(); hiIndex = Math.min(items.length-1, hiIndex+1); }
+  else if (e.key === 'ArrowUp'){ e.preventDefault(); hiIndex = Math.max(0, hiIndex-1); }
+  else if (e.key === 'Enter'){ if (items[hiIndex]) items[hiIndex].click(); return; }
+  else return;
+  items.forEach(i => i.classList.remove('hi'));
+  if (items[hiIndex]) items[hiIndex].classList.add('hi');
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-wrap')) autocomplete.classList.remove('open');
+});
+
+/* =========================================================
+   9. INIT
+   ========================================================= */
+function init(){
+  if (window.lucide) lucide.createIcons();
+  moveTabBg(document.querySelector('.region-tab.active'));
+  refreshAll();
+
+  if (window.gsap && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    gsap.from('.kpi-overlay .kpi-card', { opacity: 0, y: -14, duration: 0.6, stagger: 0.08, ease: 'power3.out', delay: 0.15 });
+    gsap.from('.metric-overlay', { opacity: 0, x: 14, duration: 0.6, ease: 'power3.out', delay: 0.25 });
+    gsap.from('.map-footnote', { opacity: 0, y: 10, duration: 0.6, ease: 'power3.out', delay: 0.35 });
+    gsap.from('.chart-panel', { opacity: 0, y: 18, duration: 0.6, stagger: 0.1, ease: 'power3.out', delay: 0.3 });
+  }
+}
+
+window.addEventListener('load', init);
+window.addEventListener('resize', () => moveTabBg(document.querySelector('.region-tab.active')));
+
+})();
+</script>
+</body>
+</html>
